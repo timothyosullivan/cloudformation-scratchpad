@@ -1,0 +1,85 @@
+Parameters:
+  InstTypeParam:
+    Type: String
+    Default: t2.micro
+    AllowedValues:
+        - t2.micro
+        - t2.medium
+        - t3.medium
+    Description: EC2 Instance Type
+  KeyName:
+    Description: Name of an existing EC2 KeyPair to enable SSH access into the server
+    Type: AWS::EC2::KeyPair::KeyName
+Mappings:
+  RegionMap:
+    us-east-1:
+      AMI: ami-467ca739
+    us-west-1:
+      AMI: ami-bf5540df
+Resources:
+  EC2Instance:
+    Type: AWS::EC2::Instance
+    Metadata:
+      AWS::CloudFormation::Init:
+        config: 
+          packages: 
+            yum:
+              httpd: []
+              php: []
+          files: 
+            /var/www/html/index.php:
+              content: !Sub |
+                <?php print "Hello from EC2 PhP Web Server"; ?>
+          services: 
+            sysvinit:
+              httpd:
+                enabled: true
+                ensureRunning: true
+    Properties:
+      InstanceType: !Ref InstTypeParam
+      ImageId: !FindInMap
+        - RegionMap
+        - !Ref AWS::Region
+        - AMI
+      Tags:
+        - Key: Name
+          Value: !Join 
+            - " "
+            - - "Web Server Instance in AWS region: "
+              - !Ref AWS::Region
+      KeyName: !Ref KeyName
+      SecurityGroups:
+        - !Ref SSHSecurityGroup
+        - !Ref HTTPSecurityGroup
+      UserData:
+        'Fn::Base64': 
+          !Sub |
+            #!/bin/bash -xe            
+            # Ensure AWS CFN Bootstrap is the latest
+            yum install -y aws-cfn-bootstrap
+            # Install the files and packages from the metadata
+            /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource EC2Instance  --region ${AWS::Region}
+  SSHSecurityGroup:
+      Type: AWS::EC2::SecurityGroup
+      Properties:
+        GroupName: 'SSH Security Group'
+        GroupDescription: 'Enable SSH access via port 22'
+        SecurityGroupIngress:
+        - IpProtocol: TCP
+          FromPort: '22'
+          ToPort: '22'
+          CidrIp: 0.0.0.0/0
+  HTTPSecurityGroup:
+      Type: AWS::EC2::SecurityGroup
+      Properties:
+        GroupName: 'HTTP Security Group'
+        GroupDescription: 'Enable HTTP access via port 80'
+        SecurityGroupIngress:
+        - IpProtocol: TCP
+          FromPort: '80'
+          ToPort: '80'
+          CidrIp: 0.0.0.0/0
+Outputs:
+  InstanceDNS:
+    Description: DNS details for the EC2 instance
+    Value: !Sub 'http://${EC2Instance.PublicDnsName}'

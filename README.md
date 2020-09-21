@@ -1,12 +1,4 @@
 
-Source code & Lesson files for the A Cloud Guru, Introduction to CloudFormation course.
+Basic Cloud Formation script illustrating instantiation of an EC2 instance and running simple PhP Web Server 
 
-## Lessons
-
-There are four sections, each with multiple hands on labs.
-
-- 01: Introduciton to CloudFormation
-- 02: CloudFormation Features
-- 03: Setting up an EC2 Instance
-- 04: Change Sets
 
