@@ -1,25 +1,27 @@
 Parameters:
-  myKeyPair: 
-    Description: Amazon EC2 Key Pair
+  InstTypeParam:
+    Description: EC2 Instance Type
+    Type: String
+    Default: t2.micro
+    AllowedValues:
+        - t2.micro
+        - t2.medium
+        - t3.medium
+  KeyName:
+    Description: Name of an existing EC2 KeyPair to enable SSH access into the server
     Type: AWS::EC2::KeyPair::KeyName
   VpcId:
     Description: Enter the VpcId
     Type: AWS::EC2::VPC::Id
   SubnetIds:
-    Description: Enter the Subnets
+    Description: Enter the SubnetIds
     Type: List<AWS::EC2::Subnet::Id>
 Mappings:
   RegionMap:
     us-east-1:
-      AMI: ami-1853ac65
+      AMI: ami-467ca739
     us-west-1:
       AMI: ami-bf5540df
-    eu-west-1:
-      AMI: ami-3bfab942
-    ap-southeast-1:
-      AMI: ami-e2adf99e
-    ap-southeast-2:
-      AMI: ami-43874721
 Resources:
   LoadBalancer: # Application Load Balancer
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
@@ -54,7 +56,7 @@ Resources:
         - !Ref TargetGroup
   LaunchConfiguration:
     Type: AWS::AutoScaling::LaunchConfiguration
-    Metadata: 
+    Metadata:
       Comment: Install php and httpd
       AWS::CloudFormation::Init:
         config: 
@@ -65,26 +67,25 @@ Resources:
           files: 
             /var/www/html/index.php:
               content: !Sub |
-                <?php print "Hello world Abs was here!"; ?>
+                <?php print "Hello from EC2 PhP Web Server"; ?>
           services: 
             sysvinit:
               httpd:
                 enabled: true
                 ensureRunning: true
     Properties:
-      KeyName: !Ref myKeyPair
-      InstanceType: t2.micro
-      SecurityGroups:
-        - !Ref EC2SecurityGroup
-      ImageId:
-        Fn::FindInMap:
+      KeyName: !Ref KeyName
+      InstanceType: !Ref InstTypeParam
+      ImageId: !FindInMap
         - RegionMap
         - !Ref AWS::Region
         - AMI
+      SecurityGroups:
+        - !Ref EC2HTTPSecurityGroup
       UserData:
         'Fn::Base64': 
           !Sub |
-            #!/bin/bash -xe                        
+            #!/bin/bash -xe            
             # Ensure AWS CFN Bootstrap is the latest
             yum install -y aws-cfn-bootstrap
             # Install the files and packages from the metadata
@@ -99,10 +100,11 @@ Resources:
           FromPort: 80
           ToPort: 80
           CidrIp: 0.0.0.0/0
-  EC2SecurityGroup: 
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: EC2 Instance
+  EC2HTTPSecurityGroup:
+      Type: AWS::EC2::SecurityGroup
+      Properties:
+        GroupName: 'HTTP Security Group'
+        GroupDescription: 'Enable HTTP access via port 80 for traffic routed via Application Load Balancer only '
   EC2InboundRule: # EC2 can only accept traffic from ALB
     Type: AWS::EC2::SecurityGroupIngress
     Properties:
@@ -115,9 +117,15 @@ Resources:
         - GroupId
       GroupId:
         !GetAtt
-        - EC2SecurityGroup
+        - EC2HTTPSecurityGroup
         - GroupId
 Outputs:
-  PublicDns:
-    Description: The Public DNS
+  InstanceDNS:
+    Description: Public DNS details for the Load Balancer
     Value: !Sub 'http://${LoadBalancer.DNSName}'
+  RegionLoadBalancer:
+    Description: Region of Load Balancer
+    Value: !Join 
+            - " "
+            - - "Load Balancer Region: "
+              - !Ref AWS::Region
